@@ -133,20 +133,32 @@ char *parse(){
 
 int boot(){
 	//mount root fs
+	msg(INFO, "Mounting root filesystem...");
 	system("mount -o remount,rw /");
+	puts("done.");
 	//set hostname /etc/hostname
 	
 	//mount all drives in /etc/fstab
 	//udev?
 
-	//clean: /tmp /var/lock /var/run
-	if(DEBUG)
-		system("rm -rfi /tmp/* && rm -rfI /var/lock/* && rm -rfI /var/run/*");
-	else
-		system("rm -rf /tmp/* && rm -rf /var/lock/* && rm -rf /var/run/*");
-
-	//start a login shell
-	
+	//clean up files
+	msg(INFO, "Cleaning up from last boot...");
+	const char *command = "rm ";
+	char args[6] = "-rf ";
+	if(DEBUG) strcpy(args, "-rfI ");
+	char full_command[MAX_NAME * 3 + 1] = {'\0'};
+	size_t i;
+	for(i = 0; CLEAN_ON_BOOT[i] != NULL; i++){
+		strcpy(full_command, command);
+		strncat(full_command, args, MAX_NAME * 3);
+		strncat(full_command, CLEAN_ON_BOOT[i], MAX_NAME * 3);
+		if(DEBUG) fprintf(stderr, "[ DEBUG ] Deleting files in '%s' with command '%s'\n", CLEAN_ON_BOOT[i], full_command);
+		else printf("'%s',", CLEAN_ON_BOOT[i]);
+		system(full_command);
+	}
+	puts("\b... done.");
+	//start a login shell or getty?
+	return 0;
 }
 
 int main(int argc, char *argv[]){
@@ -157,6 +169,8 @@ int main(int argc, char *argv[]){
 	msg(INFO, "Test.\n");
 
 	if((int)getpid() != 1 && DEBUG) fprintf(stderr, "[ DEBUG ] Warning, I am not the init system. My PID is %d\n", (int)getpid());
+
+	boot();
 
 	char *programs = NULL;
 	do {

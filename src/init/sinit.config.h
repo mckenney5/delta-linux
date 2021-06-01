@@ -20,9 +20,12 @@
 // Message of the day, displayed at boot
 #define MOTD "=== Simple Init ==="
 
-// Used for debugging messages if compiled with -DDEBUGGING in GCC
-/* You can replace these lines with just: */
+// Used for debugging/diagnostic messages  
 #define DEBUG 1  // if you always want diagnostic messages on. Or
 //#define DEBUG 0  // if you want debug messages off
+
+// These are the folders that get wiped (rm -rf) at boot, make sure to use this format
+// WATCH FOR TYPOS.
+const char *CLEAN_ON_BOOT[MAX_NAME] = {"/tmp/*", "/var/lock/*", "/var/run/*", NULL};
 
 #endif // end of SINITS configuration
