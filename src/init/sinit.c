@@ -6,19 +6,7 @@
 #include <sys/wait.h>
 #include <string.h>
 
-#define MAX_NAME 100
-#define MAX_PROCESSES 100
-#define MAX_SIZE 1024
-#define MAX_TRIES 5
-#define CONFIG_FILE "sinit.conf"
-
-#define MOTD "=== Simple Init ==="
-
-#ifdef DEBUGGING
-	#define DEBUG 1
-#else
-	#define DEBUG 0
-#endif
+#include "sinit.config.h" // configuration file
 
 struct Process {
 	char name[MAX_NAME];
