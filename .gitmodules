@@ -1,0 +1,6 @@
+[submodule "src/bin-utils/cat"]
+	path = src/bin-utils/cat
+	url = https://github.com/mckenney5/slim-cat.git
+[submodule "src/shell"]
+	path = src/shell
+	url = https://github.com/mckenney5/qsh.git
