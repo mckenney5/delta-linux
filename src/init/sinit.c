@@ -29,11 +29,34 @@ struct Process {
 
 size_t process_count = 0;
 struct Process processes[MAX_PROCESSES];
+enum message_type{INFO, WARN, ERROR};
+
+
+void msg(enum message_type msg_type, const char *info){
+	char type[6] = {'\0'};
+	FILE *stream = stdout;
+
+	switch(msg_type){
+		case INFO:
+			strcpy(type, "INFO");
+			break;
+		case WARN:
+			strcpy(type, "WARN");
+			break;
+		case ERROR:
+			strcpy(type, "ERROR");
+			stream = stderr;
+			break;
+		default:
+			strcpy(type, "???");
+	}
+	fprintf(stream, "[ %s ] %s", type, info);
+}
 
 void panic(){
-	fprintf(stderr, "[ERROR] A fatal error has occured! Dropping you into a shell... Good luck.\n");
+	msg(ERROR, "A fatal error has occured! Dropping you into a shell... Good luck.\n");
 	system("/bin/sh"); //TODO replace with exec and default shell
-	printf("[INFO] Trying again after a fatal error.\n");
+	msg(INFO, "Trying again after a fatal error.\n");
 }
 
 void *xmalloc(size_t size){
@@ -43,11 +66,11 @@ void *xmalloc(size_t size){
 		for(i; i < MAX_TRIES; i++){
 			ptr = malloc(size);
 			if(ptr != NULL) return ptr;
-			if(DEBUG) fprintf(stderr, "[DEBUG] Failed to allocate memory.\n");
+			if(DEBUG) fprintf(stderr, "[ DEBUG ] Failed to allocate memory.\n");
 			sleep(1);
 		}
-		fprintf(stderr, "[ERROR] FATAL - Unable to allocate memory after %d attempts!\n", MAX_TRIES);
-		//exit(1);
+		msg(ERROR, "FATAL - Unable to allocate memory after ");
+		fprintf(stderr, "%d attempts!\n", MAX_TRIES);
 		panic();
 	} while(ptr == NULL);
 }
@@ -65,16 +88,17 @@ int restart(const char *program){
 	//size_t place = process_count++;
 	size_t i = 0;
 	do{
-		if(DEBUG) fprintf(stderr, "[DEBUG] Starting process '%s' at PID %d\n", program, (int) getpid());
+		if(DEBUG) fprintf(stderr, "[ DEBUG ] Starting process '%s' at PID %d\n", program, (int) getpid());
 		system(program); //TODO maybe exec?
 		char *argv[2];
 		argv[0] = program;
 		argv[1] = NULL;
 		execv(program, argv);
-		if(DEBUG) fprintf(stderr, "[DEBUG] Process '%s' at PID %d died.\n", program, (int) getpid());
+		if(DEBUG) fprintf(stderr, "[ DEBUG ] Process '%s' at PID %d died.\n", program, (int) getpid());
 		sleep(2);
 		if(++i >= MAX_TRIES){
-			fprintf(stderr, "[ERROR] Process '%s' at PID %d failed more than %d times! Stopping it.\n", program, (int)getpid(), MAX_TRIES);
+			msg(ERROR, "Process ");
+			fprintf(stderr, "'%s' at PID %d failed more than %d times! Stopping it.\n", program, (int)getpid(), MAX_TRIES);
 			break;
 		}
 	} while(processes[process_count].restart);
@@ -89,7 +113,7 @@ int run(const char* program){
 		restart(program);
 		exit(0);
 	} else if(pid == -1){
-		if(DEBUG) fprintf(stderr, "[DEBUG] Error forking '%s'\n", program);
+		if(DEBUG) fprintf(stderr, "[ DEBUG ] Error forking '%s'\n", program);
 		return -1;
 	} else
 		return 0;
@@ -100,9 +124,10 @@ char *parse(){
 	FILE *fp = NULL;
 	fp = fopen(CONFIG_FILE, "r");
 	if(fp == NULL){
-		fprintf(stderr, "[ERROR] FATAL - Config file '%s' not found!\n", CONFIG_FILE);
+		msg(ERROR, "FATAL - Config file ");
+		fprintf(stderr, "'%s' not found!\n", CONFIG_FILE);
 		panic();
-		printf("[INFO] Attempting to load config file again...\n");
+		msg(INFO, "Attempting to load config file again...\n");
 		return NULL;
 	}
 	char *programs = NULL;
@@ -141,8 +166,9 @@ int main(int argc, char *argv[]){
 	int status = 0;
 	size_t i = 0;
 	puts(MOTD);
+	msg(INFO, "Test.\n");
 
-	if((int)getpid() != 1 && DEBUG) fprintf(stderr, "[DEBUG] Warning, I am not the init system. My PID is %d\n", (int)getpid());
+	if((int)getpid() != 1 && DEBUG) fprintf(stderr, "[ DEBUG ] Warning, I am not the init system. My PID is %d\n", (int)getpid());
 
 	char *programs = NULL;
 	do {
@@ -158,10 +184,10 @@ int main(int argc, char *argv[]){
 		sleep(2);
 		pid_t childpid = wait(&status);
 		if((int)childpid == -1) break; //if all programs are done running, time to stop?
-		if(DEBUG) fprintf(stderr, "[DEBUG] Process PID %d exited with %d\n", (int) childpid, status);
+		if(DEBUG) fprintf(stderr, "[ DEBUG ] Process PID %d exited with %d\n", (int) childpid, status);
 		status = 0;
 	}
-	printf("[INFO] No more programs to run. Press enter to exit...");
+	msg(INFO, "No more programs to run. Press enter to exit...");
 	getchar();
 	// check if we are root
 	// parse init config file
