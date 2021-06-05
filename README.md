@@ -15,7 +15,7 @@ _sinit_ - A *very* simple init system that starts the bare minimum to start work
 
 
 ### Bin-Utils
-_slimcat_ - A POSIX compliant cat rewrite writren in under 50 lines of C.
+_slimcat_ - A POSIX compliant cat rewrite writren in under 60 lines of C.
 
 *more coming _soon_(tm)*
 
