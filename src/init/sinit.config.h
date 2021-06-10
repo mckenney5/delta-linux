@@ -2,10 +2,14 @@
 #ifndef _USING_SINIT_CONFIG_H
 #define _USING_SINIT_CONFIG_H
 
+// Folder location of daemons
+//#define DAEMON_LOCATION "/startup/"
+#define DAEMON_LOCATION "/tmp/startup/"
+
 // Largest name for a program
 #define MAX_NAME 100
 
-// Largest ammount of process to ru
+// Largest ammount of process to run
 #define MAX_PROCESSES 100
 
 // Max size of input
@@ -14,8 +18,8 @@
 // Max tries to allocate memory AND to restart programs
 #define MAX_TRIES 5
 
-// Location of the start up file (contains programs to be run at start up)
-#define CONFIG_FILE "sinit.conf"
+// Microsecond sleep time before a loop (changing this can make the program faster but also spam faster on errors)
+#define USLEEP_TIME 100000
 
 // Message of the day, displayed at boot
 #define MOTD "=== Simple Init ==="

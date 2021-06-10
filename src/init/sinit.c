@@ -5,20 +5,13 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <dirent.h>
+#include <limits.h>
 
 #include "sinit.config.h" // configuration file
 
-struct Process {
-	char name[MAX_NAME];
-	pid_t pid;
-	int restart;
-	struct Process *next;
-} head;
-
-size_t process_count = 0;
-struct Process processes[MAX_PROCESSES];
+char current_dir[PATH_MAX] = {'\0'}; //cwd
 enum message_type{INFO, WARN, ERROR};
-
 
 void msg(enum message_type msg_type, const char *info){
 	char type[6] = {'\0'};
@@ -55,7 +48,7 @@ void *xmalloc(size_t size){
 			ptr = malloc(size);
 			if(ptr != NULL) return ptr;
 			if(DEBUG) fprintf(stderr, "[ DEBUG ] Failed to allocate memory.\n");
-			sleep(1);
+			usleep(USLEEP_TIME);
 		}
 		msg(ERROR, "FATAL - Unable to allocate memory after ");
 		fprintf(stderr, "%d attempts!\n", MAX_TRIES);
@@ -63,42 +56,34 @@ void *xmalloc(size_t size){
 	} while(ptr == NULL);
 }
 
-void clear_process(const size_t count){
-	processes[count].name[0] = '\0';
-	processes[count].pid = 0;
-	processes[count].restart = 0;
-}
+void start(char *program){
+	printf("[ INFO ] Starting process '%s' at PID %d\n", program, (int) getpid());
+	int returnnum = 0;
+	char *argv[2];
+	argv[0] = program;
+	argv[1] = NULL;
 
-int restart(const char *program){
-	strncpy(processes[process_count].name, program, MAX_NAME-1);
-	processes[process_count].pid = getpid();
-	processes[process_count].restart = 1;
-	//size_t place = process_count++;
-	size_t i = 0;
-	do{
-		if(DEBUG) fprintf(stderr, "[ DEBUG ] Starting process '%s' at PID %d\n", program, (int) getpid());
-		system(program); //TODO maybe exec?
-		char *argv[2];
-		argv[0] = program;
-		argv[1] = NULL;
-		execv(program, argv);
-		if(DEBUG) fprintf(stderr, "[ DEBUG ] Process '%s' at PID %d died.\n", program, (int) getpid());
-		sleep(2);
-		if(++i >= MAX_TRIES){
-			msg(ERROR, "Process ");
-			fprintf(stderr, "'%s' at PID %d failed more than %d times! Stopping it.\n", program, (int)getpid(), MAX_TRIES);
-			break;
+	chdir(DAEMON_LOCATION);
+	do {
+		returnnum = execv(program, argv);
+		if(returnnum == -1){
+			msg(ERROR, "Failed to start program via execv, more info: ");
+			perror(program);
+			usleep(USLEEP_TIME);
 		}
-	} while(processes[process_count].restart);
-	
-	return 0;
+	} while(returnnum == -1);
+	chdir(current_dir);
+
+	printf("[ INFO ] Process '%s' at PID %d died.\n", program, (int) getpid());
 }
 
-int run(const char* program){
+int run(char* program){
+	msg(INFO, "Starting ");
+	printf("%s\n", program);
 	// fork a process
 	pid_t pid = fork();
 	if(pid == 0){
-		restart(program);
+		start(program);
 		exit(0);
 	} else if(pid == -1){
 		if(DEBUG) fprintf(stderr, "[ DEBUG ] Error forking '%s'\n", program);
@@ -107,27 +92,30 @@ int run(const char* program){
 		return 0;
 }
 
-char *parse(){
-
-	FILE *fp = NULL;
-	fp = fopen(CONFIG_FILE, "r");
-	if(fp == NULL){
-		msg(ERROR, "FATAL - Config file ");
-		fprintf(stderr, "'%s' not found!\n", CONFIG_FILE);
-		panic();
-		msg(INFO, "Attempting to load config file again...\n");
+char **get_daemons(const char* location){
+	char **programs = NULL;
+	DIR *d;
+	struct dirent *dir;
+	d = opendir(location);
+	size_t i = 0, l = 0, size = 10;
+	if(!d){
+		msg(ERROR, "Cannot read files.\n");
+		perror("opendir");
 		return NULL;
 	}
-	char *programs = NULL;
-	programs = (char*) xmalloc(MAX_SIZE * sizeof(char));
-	char data = 0;
-	size_t i = 0;
-	for(data = (char)fgetc(fp); data != EOF; data = (char)fgetc(fp)){
-		if(data == '\n') data = ' '; //TODO Handle CR
-		programs[i++] = data;
+	programs = (char**) xmalloc(sizeof(programs) * size);
+	while ((dir = readdir(d)) != NULL) {
+		if(dir->d_name[0] != '.'){ //ignore hidden files and . and ..
+			programs[i] = xmalloc(sizeof(char) * strlen(dir->d_name) + 1);
+			strcpy(programs[i], dir->d_name);
+			if(++i >= size){
+				programs = realloc(programs, sizeof(programs) * (size + 10)); //TODO test this
+				size = size + 10;
+			}
+		}
 	}
-	fclose(fp);
-	programs[i] = '\0';
+		closedir(d);
+		programs[i] = NULL;
 	return programs;
 }
 
@@ -135,6 +123,7 @@ int boot(){
 	//mount root fs
 	msg(INFO, "Mounting root filesystem...");
 	system("mount -o remount,rw /");
+	getcwd(current_dir, sizeof(current_dir));
 	puts("done.");
 	//set hostname /etc/hostname
 	
@@ -161,40 +150,53 @@ int boot(){
 	return 0;
 }
 
-int main(int argc, char *argv[]){
-//TODO add logging
-	int status = 0;
+void start_daemons(){
+	char **programs = NULL;
 	size_t i = 0;
-	puts(MOTD);
-	msg(INFO, "Test.\n");
-
-	if((int)getpid() != 1 && DEBUG) fprintf(stderr, "[ DEBUG ] Warning, I am not the init system. My PID is %d\n", (int)getpid());
-
-	boot();
-
-	char *programs = NULL;
 	do {
-		programs = parse();
+		programs = get_daemons(DAEMON_LOCATION);
 	} while(programs == NULL);
 
-	char *program = NULL;
-//TODO differentiate between needing to restart the program or not
-	for(program = strtok(programs, " "); program != NULL; program = strtok(NULL, " "))
-		run(program);  
+	for(i=0; programs[i] != NULL; i++){
+		run(programs[i]);
+		free(programs[i]);
+	}
+	free(programs[i]);
 	free(programs);
+}
+
+void check_if_root(){
+	if((int)getpid() != 1){
+		msg(WARN, "I am not the init system (PID 1) My PID is ");
+		printf("%d\n", (int)getpid());
+	}
+}
+
+void watch_daemons(){
+	int status = 0;
 	while(1){
-		sleep(2);
+		usleep(USLEEP_TIME);
 		pid_t childpid = wait(&status);
 		if((int)childpid == -1) break; //if all programs are done running, time to stop?
 		if(DEBUG) fprintf(stderr, "[ DEBUG ] Process PID %d exited with %d\n", (int) childpid, status);
 		status = 0;
 	}
+
+}
+
+int main(int argc, char *argv[]){
+//TODO add logging
+	puts(MOTD);
+
+	check_if_root();
+
+	boot();
+
+	start_daemons();
+
+	watch_daemons();
+
 	msg(INFO, "No more programs to run. Press enter to exit...");
 	getchar();
-	// check if we are root
-	// parse init config file
-	// start each process
-	// add each process to the global table
-	// check if a process dies, if so, restart it
 	return 0; //probably should just loop
 }
