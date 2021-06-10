@@ -14,6 +14,12 @@ char current_dir[PATH_MAX] = {'\0'}; //cwd
 enum message_type{INFO, WARN, ERROR};
 
 void msg(enum message_type msg_type, const char *info){
+// handles messages to the user
+/*  TODO
+ * - make this like printf
+ * - add colors (white for text, different colors for msg_type)
+ */
+
 	char type[6] = {'\0'};
 	FILE *stream = stdout;
 
@@ -35,13 +41,16 @@ void msg(enum message_type msg_type, const char *info){
 }
 
 void panic(){
+// Allows users to attempt to fix their computer after fatal errors
+// TODO make the program to run a var in the config
 	msg(ERROR, "A fatal error has occured! Dropping you into a shell... Good luck.\n");
 	system("/bin/sh"); //TODO replace with exec and default shell
 	msg(INFO, "Trying again after a fatal error.\n");
 }
 
 void *xmalloc(size_t size){
-	int i = 0;
+// Allocates memory safely, will never return NULL
+	unsigned long long i = 0;
 	void *ptr = NULL;
 	do {
 		for(i; i < MAX_TRIES; i++){
@@ -51,12 +60,13 @@ void *xmalloc(size_t size){
 			usleep(USLEEP_TIME);
 		}
 		msg(ERROR, "FATAL - Unable to allocate memory after ");
-		fprintf(stderr, "%d attempts!\n", MAX_TRIES);
+		fprintf(stderr, "%llu out of %d  attempts!\n", i, MAX_TRIES);
 		panic();
 	} while(ptr == NULL);
 }
 
 void start(char *program){
+// Handles the spawning of programs, this should never be called by the main thread
 	printf("[ INFO ] Starting process '%s' at PID %d\n", program, (int) getpid());
 	int returnnum = 0;
 	char *argv[2];
@@ -78,6 +88,7 @@ void start(char *program){
 }
 
 int run(char* program){
+// Handles forking of sinit
 	msg(INFO, "Starting ");
 	printf("%s\n", program);
 	// fork a process
@@ -93,6 +104,7 @@ int run(char* program){
 }
 
 char **get_daemons(const char* location){
+// Gets and returns a list of programs in a directory (normally from DAEMON_LOCATION in the sinit.config.h file)
 	char **programs = NULL;
 	DIR *d;
 	struct dirent *dir;
@@ -119,7 +131,10 @@ char **get_daemons(const char* location){
 	return programs;
 }
 
-int boot(){
+void boot(){
+// Handles the boot process
+// TODO on fail, return 1 and have main restart it
+
 	//mount root fs
 	msg(INFO, "Mounting root filesystem...");
 	system("mount -o remount,rw /");
@@ -148,12 +163,13 @@ int boot(){
 		system(full_command);
 	}
 	free(full_command);
+
 	puts("\b... done.");
 	//start a login shell or getty?
-	return 0;
 }
 
 void start_daemons(){
+// Starts the programs from and frees the list of daemons from DAEMON_LOCATION
 	char **programs = NULL;
 	size_t i = 0;
 	do {
@@ -168,7 +184,8 @@ void start_daemons(){
 	free(programs);
 }
 
-void check_if_root(){
+void check_if_init(){
+// checks if the program is the init and root
 	if((int)getpid() != 1){
 		msg(WARN, "I am not the init system (PID 1) My PID is ");
 		printf("%d\n", (int)getpid());
@@ -176,6 +193,7 @@ void check_if_root(){
 }
 
 void watch_daemons(){
+// Waits for daemons to stop and reports it
 	int status = 0;
 	while(1){
 		usleep(USLEEP_TIME);
@@ -188,17 +206,22 @@ void watch_daemons(){
 }
 
 int main(int argc, char *argv[]){
-//TODO add logging
+	// Displays the message of the day in sinit.config.h
 	puts(MOTD);
 
-	check_if_root();
+	// Checks the status of this process
+	check_if_init();
 
+	// Starts the boot process
 	boot();
 
+	// Starts the daemons
 	start_daemons();
 
+	// Waits for the daemons to stop
 	watch_daemons();
 
+	// Once all the daemons are stopped, we are done
 	msg(INFO, "No more programs to run. Press enter to exit...");
 	getchar();
 	return 0; //probably should just loop
