@@ -135,16 +135,19 @@ int boot(){
 	const char *command = "rm ";
 	char args[6] = "-rf ";
 	if(DEBUG) strcpy(args, "-rfI ");
-	char full_command[MAX_NAME * 3 + 1] = {'\0'};
-	size_t i;
+	char *full_command = NULL;
+	full_command = xmalloc((PATH_MAX + strlen(command) + strlen(args + 1)) * sizeof(char));
+	full_command[0] = 0;
+	size_t i=0;
 	for(i = 0; CLEAN_ON_BOOT[i] != NULL; i++){
 		strcpy(full_command, command);
-		strncat(full_command, args, MAX_NAME * 3);
-		strncat(full_command, CLEAN_ON_BOOT[i], MAX_NAME * 3);
+		strncat(full_command, args, strlen(args));
+		strncat(full_command, CLEAN_ON_BOOT[i], PATH_MAX);
 		if(DEBUG) fprintf(stderr, "[ DEBUG ] Deleting files in '%s' with command '%s'\n", CLEAN_ON_BOOT[i], full_command);
 		else printf("'%s',", CLEAN_ON_BOOT[i]);
 		system(full_command);
 	}
+	free(full_command);
 	puts("\b... done.");
 	//start a login shell or getty?
 	return 0;
