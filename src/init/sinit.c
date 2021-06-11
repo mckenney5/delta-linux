@@ -29,6 +29,7 @@ void msg(enum message_type msg_type, const char *info){
 			strcpy(type, "???");
 	}
 	fprintf(stream, "[ %s ] %s", type, info);
+	fflush(stream);
 }
 
 void error_sleep(){
@@ -61,22 +62,31 @@ void *xmalloc(size_t size){
 	} while(ptr == NULL);
 }
 
-void boot(){
-// Handles the boot process
-// TODO on fail, return 1 and have main restart it
+void set_hostname(){
+// sets the hostname from HOSTNAME_FILE in the config header
+	char hostname[HOST_NAME_MAX] = {'\0'};
+	char data = 0;
+	size_t i = 0;
+	//open file / hostname location
 
-	//mount root fs
-	msg(INFO, "Mounting root filesystem...");
-	system("mount -o remount,rw /");
-	getcwd(current_dir, sizeof(current_dir));
-	puts("done.");
-	//set hostname /etc/hostname
-	
-	//mount all drives in /etc/fstab
-	//udev?
+	FILE *fp = NULL;
+	fp = fopen(HOSTNAME_FILE, "r");
+	if(fp == NULL){
+		msg(ERR, "Failed to get hostname file, more info: ");
+		perror("fopen");
+	} else {
+		for(data = (char)fgetc(fp); data != EOF && i < HOST_NAME_MAX; data = (char)fgetc(fp))
+			hostname[i++] = data;
+		fclose(fp);
+		if(sethostname(hostname, strlen(hostname))){
+			msg(ERR, "Failed to set hostname, more info: ");
+			perror("sethostname");
+		}	
+	}
+}
 
-	//clean up files
-	msg(INFO, "Cleaning up from last boot...");
+void clean_files(){
+// deletes files defined in CLEAN_ON_BOOT in the config header
 	const char *command = "rm ";
 	char args[6] = "-rf ";
 	if(DEBUG) strcpy(args, "-rfI ");
@@ -88,22 +98,46 @@ void boot(){
 		strcpy(full_command, command);
 		strncat(full_command, args, strlen(args));
 		strncat(full_command, CLEAN_ON_BOOT[i], PATH_MAX);
-		if(DEBUG) fprintf(stderr, "[ DEBUG ] Deleting files in '%s' with command '%s'\n", CLEAN_ON_BOOT[i], full_command);
-		else printf("'%s',", CLEAN_ON_BOOT[i]);
+		printf("'%s', ", CLEAN_ON_BOOT[i]);
 		system(full_command);
 	}
 	free(full_command);
+}
 
-	puts("\b... done.");
+void boot(){
+// Handles the boot process
+// TODO on fail, return 1 and have main restart it
+
+	//mount root fs
+	msg(INFO, "Mounting root filesystem...");
+	system("mount -o remount,rw /");
+	getcwd(current_dir, sizeof(current_dir));
+	puts("done.");
+	
+	//set hostname
+	msg(INFO, "Setting the hostname...");
+	set_hostname();
+	puts("done.");
+	
+	//mount all drives in /etc/fstab
+	//udev?
+
+	//clean up files
+	msg(INFO, "Cleaning up from last boot...");
+	clean_files();
+	puts("\b\b... done.");
 	//start a login shell or getty?
+
 }
 
 void check_if_init(){
 // checks if the program is the init and root
 	if((int)getpid() != 1){
-		msg(WARN, "I am not the init system (PID 1) My PID is ");
+		msg(WARN, "I am not the init system (PID 1), my PID is ");
 		printf("%d\n", (int)getpid());
 	}
+	if(geteuid() != 0)
+		msg(WARN, "I am not root\n");
 }
 
 int main(int argc, char *argv[]){

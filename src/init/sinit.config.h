@@ -6,6 +6,9 @@
 //#define DAEMON_LOCATION "/startup/"
 #define DAEMON_LOCATION "/tmp/startup/"
 
+// Location of a text file that holds the host name, only reads up to HOST_NAME_MAX (64 bytes on Linux)
+#define HOSTNAME_FILE "/etc/hostname"
+
 /*
 // Location of log file
 #define LOG_FILE "/var/log/init.log"
