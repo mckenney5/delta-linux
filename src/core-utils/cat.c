@@ -22,7 +22,8 @@ void throw_error(const char* extra_msg, const int exit_code){
 }
 void cat(const int fd, const char no_buf, size_t size){
 /* reads from the file descriptor into buf, until zero bytes are read  */
-	if(fd == STDIN_FILENO || size > MAX_SENDFILE_LINUX){
+	//tries sendfile if available (since it is faster, if not, do sys read & write)
+	if(fd == STDIN_FILENO || size > MAX_SENDFILE_LINUX || sendfile(STDOUT_FILENO, fd, 0, size) != size){
 		size_t r = 0;
 		if(no_buf) size = 1;
 		void *buf = (void*)malloc(size);
@@ -31,8 +32,8 @@ void cat(const int fd, const char no_buf, size_t size){
 			if(write(STDOUT_FILENO, buf, r) != r) throw_error(NULL, 3); //if writing stops for some reason
 		if(r == -1) throw_error(NULL, 1); //if read(2) throws an error
 		free(buf);
-	} else //if we are given a file, use the sendfile syscall for better speed
-		if(sendfile(STDOUT_FILENO, fd, 0, size) != size) throw_error("In sendfile", 1);
+	} //else 
+	//	throw_error("Unable to cat file.", 1);
 }
 void get_file(const char* file_name, const char no_buf){
 /* tries to open the user's file, then calls cat() with its file pointer */
